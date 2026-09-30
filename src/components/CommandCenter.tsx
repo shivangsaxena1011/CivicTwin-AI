@@ -73,13 +73,14 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
   // Selected Region Drilldown details
   const regionDemo = demographics.find((d) => d.region === selectedRegion) || demographics[0];
-  const regionSignals = signals.filter((s) => s.district.toLowerCase() === regionDemo?.district.toLowerCase());
-  const regionInfra = infrastructure.filter((i) => i.district.toLowerCase() === regionDemo?.district.toLowerCase());
-  const regionProjects = projects.filter((p) => p.district.toLowerCase() === regionDemo?.district.toLowerCase());
-  const regionClusters = clusters.filter((c) =>
-    c.locations.some((l) => l.district.toLowerCase() === regionDemo?.district.toLowerCase())
-  );
-  const regionSilentGaps = silentGaps.filter((g) => g.district.toLowerCase() === regionDemo?.district.toLowerCase());
+  const targetDist = regionDemo?.district?.toLowerCase() || '';
+  const regionSignals = targetDist ? signals.filter((s) => s.district?.toLowerCase() === targetDist) : [];
+  const regionInfra = targetDist ? infrastructure.filter((i) => i.district?.toLowerCase() === targetDist) : [];
+  const regionProjects = targetDist ? projects.filter((p) => p.district?.toLowerCase() === targetDist) : [];
+  const regionClusters = targetDist ? clusters.filter((c) =>
+    c.locations.some((l) => l.district?.toLowerCase() === targetDist)
+  ) : [];
+  const regionSilentGaps = targetDist ? silentGaps.filter((g) => g.district?.toLowerCase() === targetDist) : [];
 
   // Category breakdown for chart
   const categoryCounts: Record<string, number> = {};

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SearchCode,
   FileCheck,
@@ -34,8 +34,14 @@ export const EvidenceExplorerView: React.FC<EvidenceExplorerViewProps> = ({
 }) => {
   const [activeRecId, setActiveRecId] = useState<string>(selectedRecId);
 
+  useEffect(() => {
+    if (selectedRecId) {
+      setActiveRecId(selectedRecId);
+    }
+  }, [selectedRecId]);
+
   const activeRec = recommendations.find((r) => r.id === activeRecId) || recommendations[0];
-  const targetDistrict = activeRec?.district || 'Mandla';
+  const targetDistrict = activeRec?.district || (activeRec?.region?.split(',')[0]?.trim()) || 'Mandla';
 
   // Gather supporting evidence entities
   const relatedSignals = signals.filter(
@@ -97,7 +103,7 @@ export const EvidenceExplorerView: React.FC<EvidenceExplorerViewProps> = ({
             </span>
             <span>·</span>
             <span>
-              <strong>Target:</strong> {activeRec?.affectedPopulation.toLocaleString()} citizens
+              <strong>Target:</strong> {(activeRec?.affectedPopulation || 0).toLocaleString()} citizens
             </span>
             <span>·</span>
             <span>

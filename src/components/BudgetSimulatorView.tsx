@@ -135,6 +135,8 @@ export const BudgetSimulatorView: React.FC<BudgetSimulatorViewProps> = ({
               <option value="Karnataka">Karnataka</option>
               <option value="Tamil Nadu">Tamil Nadu</option>
               <option value="Odisha">Odisha</option>
+              <option value="Uttar Pradesh">Uttar Pradesh</option>
+              <option value="West Bengal">West Bengal</option>
             </select>
 
             <select
@@ -148,6 +150,8 @@ export const BudgetSimulatorView: React.FC<BudgetSimulatorViewProps> = ({
               <option value="Healthcare">Healthcare</option>
               <option value="School Education">School Education</option>
               <option value="Power & Energy">Power & Energy</option>
+              <option value="Irrigation & Agriculture">Irrigation & Agriculture</option>
+              <option value="Public Housing & Drainage">Public Housing & Drainage</option>
             </select>
           </div>
         </div>

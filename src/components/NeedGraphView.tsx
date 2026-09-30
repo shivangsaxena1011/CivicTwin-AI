@@ -31,12 +31,12 @@ export const NeedGraphView: React.FC<NeedGraphViewProps> = ({
 
   const selectedCluster = clusters.find((c) => c.id === selectedClusterId) || clusters[0];
   const relatedSignals = signals.filter((s) => s.clusterId === selectedCluster?.id);
-  const districtName = selectedCluster?.locations[0]?.district || 'Mandla';
+  const districtName = selectedCluster?.locations?.[0]?.district || 'Mandla';
   const relatedInfra = infrastructure.filter(
-    (i) => i.district.toLowerCase() === districtName.toLowerCase()
+    (i) => i.district?.toLowerCase() === districtName.toLowerCase()
   );
   const relatedProjects = projects.filter(
-    (p) => p.district.toLowerCase() === districtName.toLowerCase()
+    (p) => p.district?.toLowerCase() === districtName.toLowerCase()
   );
 
   return (

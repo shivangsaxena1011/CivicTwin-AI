@@ -139,6 +139,13 @@ export default function App() {
 
   const handleIngestSignal = (newSignal: CitizenSignal) => {
     setSignals((prev) => [newSignal, ...prev]);
+    setClusters((prev) =>
+      prev.map((c) =>
+        c.id === newSignal.clusterId
+          ? { ...c, signalCount: (c.signalCount || 0) + 1 }
+          : c
+      )
+    );
     showToast(`Signal ingested: "${newSignal.subCategory}" (${newSignal.language})`, 'success');
   };
 
@@ -153,6 +160,13 @@ export default function App() {
       const saved = data.recommendation || newRec;
       setRecommendations((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)]);
       setSelectedRecId(saved.id);
+
+      // Keep projects in sync with newly created candidate project
+      const projRes = await fetch('/api/projects').then((r) => r.json());
+      if (projRes?.projects) {
+        setProjects(projRes.projects);
+      }
+
       showToast(`Candidate proposal "${saved.title}" saved to registry!`, 'success');
     } catch (err) {
       console.error(err);

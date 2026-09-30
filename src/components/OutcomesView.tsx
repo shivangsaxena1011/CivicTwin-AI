@@ -88,8 +88,8 @@ export const OutcomesView: React.FC<OutcomesViewProps> = ({ outcomes }) => {
                     />
                     <div
                       className="bg-indigo-500 h-2"
-                      style={{ width: `${outcome.currentScore - outcome.baselineScore}%` }}
-                      title={`Gain: +${outcome.currentScore - outcome.baselineScore}`}
+                      style={{ width: `${Math.max(0, outcome.currentScore - outcome.baselineScore)}%` }}
+                      title={`Gain: +${Math.max(0, outcome.currentScore - outcome.baselineScore)}`}
                     />
                   </div>
                 </div>

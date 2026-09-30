@@ -52,6 +52,7 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
   const [inputCategory, setInputCategory] = useState<IssueCategory>('Roads & Connectivity');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiAnalysisPreview, setAiAnalysisPreview] = useState<any>(null);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
 
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -61,10 +62,10 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
 
-  // Sample quick templates for demo submission
+  // Sample quick templates for demo submission across multiple Indian states
   const DEMO_PRESETS = [
     {
-      title: 'Mandla Causeway Breach (Hindi)',
+      title: 'Mandla Causeway (Madhya Pradesh)',
       lang: 'Hindi',
       source: 'WhatsApp' as SignalSource,
       district: 'Mandla',
@@ -73,7 +74,7 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
       text: 'Bichhiya gaon ke puliya par pani chad gaya hai. 108 ambulance 3 ghante se ruki hui hai aur marij ki halat gambhir hai.'
     },
     {
-      title: 'Jalna Tanker Crisis (Marathi)',
+      title: 'Jalna Tanker Crisis (Maharashtra)',
       lang: 'Marathi',
       source: 'Gram Sabha Voice' as SignalSource,
       district: 'Jalna',
@@ -82,24 +83,88 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
       text: 'Amchya talukyat 15 divsatun ekda tanker yeto, borewell che pani kharpat zalya mule balakanna ajar hot ahet.'
     },
     {
-      title: 'Gadchiroli Silent Gap (Marathi)',
+      title: 'Gadchiroli Silent Gap (Maharashtra)',
       lang: 'Marathi',
       source: 'IVR Call' as SignalSource,
       district: 'Gadchiroli',
       state: 'Maharashtra',
       category: 'Healthcare' as IssueCategory,
       text: 'Bijapur vanakshetramadhe arogya kendrat doctor mahinyatun fakt ekda yetat, gadhodar mata khup sankatat ahet.'
+    },
+    {
+      title: 'Barmer Fluoride Deficit (Rajasthan)',
+      lang: 'Hindi',
+      source: 'Civic Portal' as SignalSource,
+      district: 'Barmer',
+      state: 'Rajasthan',
+      category: 'Water & Sanitation' as IssueCategory,
+      text: 'Borewell me fluoride ki matra 4.5 mg/L se jyada hai, bacchon ke daant aur haddiyan kharab ho rahi hain. RO plant 6 mahine se band pada hai.'
+    },
+    {
+      title: 'Araria Border Healthcare (Bihar)',
+      lang: 'Hindi',
+      source: 'IVR Call' as SignalSource,
+      district: 'Araria',
+      state: 'Bihar',
+      category: 'Healthcare' as IssueCategory,
+      text: 'Kala-azar ki dawai aur rapid testing kit up-swasthya kendra me bilkul nahi hai, ration card update biometric machine bhi network na hone se band hai.'
     }
   ];
+
+  // Process raw audio via Gemini multimodal pipeline
+  const processRecordedAudio = async (audioBlob: Blob) => {
+    setIsProcessingVoice(true);
+    if (showToast) {
+      showToast('Sending raw citizen audio to Gemini 3.8 Flash for dialect transcription...', 'info');
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = async () => {
+        try {
+          const base64Data = (reader.result as string).split(',')[1];
+          const res = await fetch('/api/ai/process-voice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audioBase64: base64Data,
+              mimeType: audioBlob.type || 'audio/webm',
+              language: inputLang,
+              district: inputDistrict,
+              state: inputState
+            })
+          });
+          const data = await res.json();
+          if (data.transcription) {
+            setInputText(data.transcription);
+          }
+          if (data.analysis?.issueCategory) {
+            setInputCategory(data.analysis.issueCategory);
+          }
+          if (showToast) {
+            showToast('Gemini voice processing complete: transcribed & categorized', 'success');
+          }
+        } catch (callErr) {
+          console.error('Failed to process audio with Gemini:', callErr);
+        } finally {
+          setIsProcessingVoice(false);
+        }
+      };
+    } catch (e) {
+      console.error(e);
+      setIsProcessingVoice(false);
+    }
+  };
 
   // Voice recording handlers
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         if (showToast) {
-          showToast('Voice recording unavailable in iframe. Using demo text processing.', 'warning');
+          showToast('Microphone access restricted in browser sandbox. Using demo citizen audio recording.', 'info');
         }
-        setInputText('School bus cannot reach our village because rain water flooded the unpaved road and broken culvert.');
+        handleSimulateVoiceAudio();
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -115,6 +180,7 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
+        processRecordedAudio(audioBlob);
       };
 
       mediaRecorder.start();
@@ -125,11 +191,10 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
       }, 1000);
     } catch (err) {
       console.warn('Microphone permission denied or unavailable:', err);
-      // Graceful fallback per instructions
-      setInputText('School bus cannot reach our village because rain water flooded the unpaved road and broken culvert.');
       if (showToast) {
-        showToast('Voice processing simulated with demo civic voice record.', 'info');
+        showToast('Microphone denied in iframe. Processing demo citizen audio recording.', 'info');
       }
+      handleSimulateVoiceAudio();
     }
   };
 
@@ -138,9 +203,38 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       clearInterval(timerRef.current);
-      if (!inputText) {
-        setInputText('Bichhiya nala paar karne wala rasta toot gaya hai, ambulance gaon me nahi aa pa rahi hai.');
+    }
+  };
+
+  const handleSimulateVoiceAudio = async () => {
+    setIsProcessingVoice(true);
+    try {
+      const res = await fetch('/api/ai/process-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioBase64: 'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwH/////////FUmpZpkq17GDD0JAe5mrhVyuhVWKhkSEg', // mock audio chunk
+          mimeType: 'audio/webm',
+          language: inputLang,
+          district: inputDistrict,
+          state: inputState
+        })
+      });
+      const data = await res.json();
+      if (data.transcription) {
+        setInputText(data.transcription);
       }
+      if (data.analysis?.issueCategory) {
+        setInputCategory(data.analysis.issueCategory);
+      }
+      if (showToast) {
+        showToast('Processed simulated citizen audio via Gemini pipeline', 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      setInputText('Bichhiya nala paar karne wala rasta toot gaya hai, ambulance gaon me nahi aa pa rahi hai.');
+    } finally {
+      setIsProcessingVoice(false);
     }
   };
 
@@ -563,17 +657,30 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
 
             <form onSubmit={handleSubmitSignal} className="space-y-4 text-xs">
               {/* Voice Recording Widget */}
-              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-center">
-                <div className="flex items-center justify-center gap-3 mb-2">
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-center space-y-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   {!isRecording ? (
-                    <button
-                      type="button"
-                      onClick={startRecording}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 hover:bg-rose-600/30 transition"
-                    >
-                      <Mic className="h-4 w-4 text-rose-400" />
-                      <span>Record Voice Signal</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={startRecording}
+                        disabled={isProcessingVoice}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-300 hover:bg-rose-600/30 transition disabled:opacity-50"
+                      >
+                        <Mic className="h-4 w-4 text-rose-400" />
+                        <span>Record Voice Signal</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSimulateVoiceAudio}
+                        disabled={isProcessingVoice}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/30 transition disabled:opacity-50"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                        <span>Simulate Citizen Audio Note</span>
+                      </button>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -581,18 +688,25 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white animate-pulse"
                     >
                       <MicOff className="h-4 w-4" />
-                      <span>Stop Recording ({recordingDuration}s)</span>
+                      <span>Stop Recording ({recordingDuration}s) & Send to Gemini</span>
                     </button>
                   )}
                 </div>
+
+                {isProcessingVoice && (
+                  <div className="flex items-center justify-center gap-2 text-indigo-400 text-xs py-1">
+                    <div className="h-3.5 w-3.5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+                    <span>Gemini 3.8 Flash transcribing citizen dialect and analyzing grievance...</span>
+                  </div>
+                )}
 
                 {audioUrl && (
                   <div className="mt-2">
                     <audio src={audioUrl} controls className="w-full h-8" />
                   </div>
                 )}
-                <span className="text-[10px] text-slate-500 block mt-1">
-                  Browser MediaRecorder integration with automatic speech-to-intent synthesis.
+                <span className="text-[10px] text-slate-400 block leading-tight">
+                  <strong>Multimodal Audio Pipeline:</strong> Citizen audio (WebM/WAV) is sent to Gemini 3.8 Flash for dialect speech-to-text and civic entity classification. If browser blocks microphone access in iframe, use the simulation button above.
                 </span>
               </div>
 
@@ -646,21 +760,43 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
                 </div>
 
                 <div>
+                  <label className="block text-slate-400 mb-1">State</label>
+                  <select
+                    value={inputState}
+                    onChange={(e) => {
+                      const newState = e.target.value;
+                      setInputState(newState);
+                      if (newState === 'Maharashtra') setInputDistrict('Jalna');
+                      else if (newState === 'Rajasthan') setInputDistrict('Barmer');
+                      else if (newState === 'Bihar') setInputDistrict('Araria');
+                      else if (newState === 'Tamil Nadu') setInputDistrict('Thiruvallur');
+                      else if (newState === 'Karnataka') setInputDistrict('Raichur');
+                      else if (newState === 'Odisha') setInputDistrict('Kalahandi');
+                      else if (newState === 'Uttar Pradesh') setInputDistrict('Sonbhadra');
+                      else if (newState === 'West Bengal') setInputDistrict('South 24 Parganas');
+                      else if (newState === 'Madhya Pradesh') setInputDistrict('Mandla');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-300 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Madhya Pradesh">Madhya Pradesh</option>
+                    <option value="Maharashtra">Maharashtra</option>
+                    <option value="Rajasthan">Rajasthan</option>
+                    <option value="Bihar">Bihar</option>
+                    <option value="Tamil Nadu">Tamil Nadu</option>
+                    <option value="Karnataka">Karnataka</option>
+                    <option value="Odisha">Odisha</option>
+                    <option value="Uttar Pradesh">Uttar Pradesh</option>
+                    <option value="West Bengal">West Bengal</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-slate-400 mb-1">District</label>
                   <input
                     type="text"
                     value={inputDistrict}
                     onChange={(e) => setInputDistrict(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-300 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 mb-1">State</label>
-                  <input
-                    type="text"
-                    value={inputState}
-                    onChange={(e) => setInputState(e.target.value)}
+                    placeholder="Enter district (e.g. Jalna, Barmer, Araria)"
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-300 focus:outline-none focus:border-indigo-500"
                   />
                 </div>

@@ -1,7 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { repository } from './data/index.js';
-import { analyzeSignalAI, generateCopilotAnswerAI, generateConvergenceOpportunityAI } from './gemini.js';
-import { CitizenSignal } from '../src/types.js';
+import {
+  analyzeSignalAI,
+  generateCopilotAnswerAI,
+  generateConvergenceOpportunityAI,
+  processVoiceAudioAI
+} from './gemini.js';
+import { CitizenSignal, Project, Recommendation } from '../src/types.js';
 
 export const apiRouter = Router();
 
@@ -72,6 +77,16 @@ apiRouter.post('/signals', async (req: Request, res: Response) => {
   });
 
   const parsed = analysisResult.analysis;
+  const resolvedCat = (issueCategory as any) || parsed.issueCategory;
+
+  // Correctly and dynamically assign to cluster, coordinates, and jurisdiction
+  const assignment = repository.assignSignalToCluster({
+    district,
+    state,
+    category: resolvedCat,
+    text
+  });
+
   const newSignal: CitizenSignal = {
     id: `sig-${Date.now().toString().slice(-5)}`,
     source: (source as any) || 'Civic Portal',
@@ -79,25 +94,25 @@ apiRouter.post('/signals', async (req: Request, res: Response) => {
     originalText: text,
     translatedText: parsed.translatedEnglish || text,
     timestamp: new Date().toISOString(),
-    district: district || 'Mandla',
-    state: state || 'Madhya Pradesh',
-    latitude: 22.6 + (Math.random() - 0.5) * 0.05,
-    longitude: 80.37 + (Math.random() - 0.5) * 0.05,
-    issueCategory: (issueCategory as any) || parsed.issueCategory,
+    district: assignment.resolvedDistrict,
+    state: assignment.resolvedState,
+    latitude: assignment.latitude,
+    longitude: assignment.longitude,
+    issueCategory: resolvedCat,
     subCategory: parsed.subCategory || 'Citizen Ingestion',
     severity: parsed.severity || 'Medium',
     affectedPopulationEstimate: parsed.affectedPopulationEstimate || 10000,
     department: parsed.department || 'Rural Development',
     sentiment: parsed.sentiment || 'Dissatisfied',
     confidence: parsed.confidence || 0.9,
-    extractedEntities: parsed.extractedEntities || [district || 'Region'],
+    extractedEntities: parsed.extractedEntities || [assignment.resolvedDistrict],
     anonymized: true,
-    clusterId: 'clus-conn-01'
+    clusterId: assignment.clusterId
   };
 
   repository.signals.unshift(newSignal);
   res.status(201).json({
-    message: 'Signal successfully ingested and analyzed',
+    message: 'Signal successfully ingested, geo-located, and assigned to need cluster',
     signal: newSignal,
     aiPowered: analysisResult.aiPowered
   });
@@ -155,14 +170,55 @@ apiRouter.get('/recommendations', (_req: Request, res: Response) => {
 });
 
 apiRouter.post('/recommendations', (req: Request, res: Response) => {
-  const newRec = req.body;
+  const newRec: Recommendation = req.body;
   if (!newRec.title || !newRec.region) {
     return res.status(400).json({ error: 'Title and region are required' });
   }
-  newRec.id = `rec-${Date.now().toString().slice(-4)}`;
-  newRec.createdAt = new Date().toISOString();
+  newRec.id = newRec.id || `rec-${Date.now().toString().slice(-4)}`;
+  newRec.createdAt = newRec.createdAt || new Date().toISOString();
   repository.recommendations.unshift(newRec);
-  res.status(201).json({ message: 'Recommendation compiled and candidate project created', recommendation: newRec });
+
+  // Register candidate project in repository.projects with the actual jurisdiction
+  const projectDistrict = newRec.district || newRec.region.split(',')[0]?.trim() || 'General';
+  const projectState = newRec.state || newRec.region.split(',')[1]?.trim() || 'National';
+
+  const exists = repository.projects.find((p) => p.name.toLowerCase() === newRec.title.toLowerCase());
+  if (!exists) {
+    const candidateProj: Project = {
+      id: `proj-cand-${Date.now().toString().slice(-4)}`,
+      name: newRec.title,
+      department: newRec.evidence?.contributingDepartments?.[0] || 'Inter-Departmental Joint Scheme',
+      region: newRec.region,
+      district: projectDistrict,
+      state: projectState,
+      status: 'Planned',
+      budget: newRec.estimatedCost || 35.0,
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      categories: (newRec.evidence?.contributingDepartments?.length
+        ? [newRec.evidence.contributingDepartments[0].replace(' Authority', '') as any]
+        : ['Roads & Connectivity']) as any,
+      coveragePercent: 0,
+      latitude: 20.5937,
+      longitude: 78.9629,
+      description: newRec.rationale
+    };
+    repository.projects.unshift(candidateProj);
+  }
+
+  res.status(201).json({
+    message: 'Recommendation compiled and candidate project created in registry',
+    recommendation: newRec
+  });
+});
+
+// Collision check evaluation across all projects
+apiRouter.get('/projects/collision-check', (req: Request, res: Response) => {
+  const { clusterId } = req.query;
+  const evaluation = repository.evaluateProjectCollisions(
+    (clusterId as string) || 'clus-conn-01'
+  );
+  res.json(evaluation);
 });
 
 // Outcomes
@@ -189,25 +245,26 @@ apiRouter.post('/ai/analyze-signal', async (req: Request, res: Response) => {
   res.json(result);
 });
 
+// Multimodal Voice Processing Pipeline (Gemini 3.8 Flash Audio Processing)
+apiRouter.post('/ai/process-voice', async (req: Request, res: Response) => {
+  const { audioBase64, mimeType, language, district, state } = req.body;
+  const result = await processVoiceAudioAI({ audioBase64, mimeType, language, district, state });
+  res.json(result);
+});
+
 apiRouter.post('/ai/copilot', async (req: Request, res: Response) => {
   const { question } = req.body;
   if (!question) {
     return res.status(400).json({ error: 'Question is required' });
   }
 
-  const contextSummary = `
-- Seeded Signals Count: ${repository.signals.length}
-- Need Clusters Count: ${repository.clusters.length}
-- Infrastructure Indicators: ${repository.infrastructure.length}
-- Active Existing Projects: ${repository.projects.length}
-- Silent Gaps Flagged: ${repository.getSilentGaps().length}
-- Showcase Highlight: Mandla-Dindori Seasonal Connectivity Gap (81,600 affected, 46% road gap, 18 culverts needed, Project proj-001 partial overlap)
-- Top Silent Gaps: Gadchiroli MH (score 93, 5 signals, 63% maternal care gap), Araria Bihar (score 88, 4 signals, 58% broadband gap), Malkangiri Odisha (score 94).
-- Key Recommendations: 10 active candidates including Mandla Feeder Culverts (₹38.5 Cr), Jalna WASH (₹46.0 Cr), Gadchiroli Solar Centers (₹54.0 Cr).
-`;
-
-  const result = await generateCopilotAnswerAI({ question, contextSummary });
-  res.json(result);
+  // Retrieve actual structured evidence dynamically from repository
+  const evidence = repository.retrieveEvidenceForQuery(question);
+  const result = await generateCopilotAnswerAI({ question, evidence });
+  res.json({
+    ...result,
+    evidence
+  });
 });
 
 apiRouter.post('/ai/convergence', async (req: Request, res: Response) => {
@@ -263,10 +320,17 @@ apiRouter.post('/integrations/messages', async (req: Request, res: Response) => 
     text: message,
     language: language || 'Hindi',
     source: 'WhatsApp',
-    location: `${district || 'Mandla'}, ${state || 'Madhya Pradesh'}`
+    location: `${district || 'General'}, ${state || 'India'}`
   });
 
   const parsed = analysisResult.analysis;
+  const assignment = repository.assignSignalToCluster({
+    district,
+    state,
+    category: parsed.issueCategory,
+    text: message
+  });
+
   const signal: CitizenSignal = {
     id: `sig-webhook-${Date.now().toString().slice(-4)}`,
     source: 'WhatsApp',
@@ -274,10 +338,10 @@ apiRouter.post('/integrations/messages', async (req: Request, res: Response) => 
     originalText: message,
     translatedText: parsed.translatedEnglish || message,
     timestamp: new Date().toISOString(),
-    district: district || 'Mandla',
-    state: state || 'Madhya Pradesh',
-    latitude: 22.59 + (Math.random() - 0.5) * 0.04,
-    longitude: 80.37 + (Math.random() - 0.5) * 0.04,
+    district: assignment.resolvedDistrict,
+    state: assignment.resolvedState,
+    latitude: assignment.latitude,
+    longitude: assignment.longitude,
     issueCategory: parsed.issueCategory,
     subCategory: parsed.subCategory,
     severity: parsed.severity,
@@ -287,7 +351,7 @@ apiRouter.post('/integrations/messages', async (req: Request, res: Response) => 
     confidence: parsed.confidence,
     extractedEntities: parsed.extractedEntities,
     anonymized: true, // Anonymized sender phone number
-    clusterId: 'clus-conn-01'
+    clusterId: assignment.clusterId
   };
 
   repository.signals.unshift(signal);
@@ -295,6 +359,7 @@ apiRouter.post('/integrations/messages', async (req: Request, res: Response) => 
     status: 'received_and_ingested',
     adapter: 'Mock Messaging Ingestion Gateway',
     signalId: signal.id,
-    parsed
+    parsed,
+    assignment
   });
 });

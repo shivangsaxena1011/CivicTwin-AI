@@ -25,6 +25,14 @@ interface ProjectCompilerViewProps {
   onSaveCandidate: (rec: Recommendation) => void;
 }
 
+interface EvaluatedCollision {
+  project: Project;
+  overlapLevel: 'HIGH OVERLAP' | 'PARTIAL OVERLAP' | 'NO OVERLAP';
+  overlapScore: number;
+  reason: string;
+  recommendedAction: string;
+}
+
 export const ProjectCompilerView: React.FC<ProjectCompilerViewProps> = ({
   clusters,
   projects,
@@ -39,33 +47,86 @@ export const ProjectCompilerView: React.FC<ProjectCompilerViewProps> = ({
   const [compiledRec, setCompiledRec] = useState<Recommendation | null>(null);
 
   const cluster = clusters.find((c) => c.id === selectedClusterId) || clusters[0];
-  const regionName = cluster?.locations[0]?.district || 'Mandla';
+  const primaryLocation = cluster?.locations?.[0] || { district: 'General', state: 'National' };
+  const districtName = primaryLocation.district;
+  const stateName = primaryLocation.state || 'National';
+  const clusterRegion = cluster?.locations?.length > 1
+    ? `${cluster.locations.map((l) => l.district).join(' & ')}, ${stateName}`
+    : `${districtName}, ${stateName}`;
 
-  // Find existing project in same region for collision detection
-  const existingProject = projects.find(
-    (p) => p.district.toLowerCase() === regionName.toLowerCase()
-  );
+  // Evaluate ALL relevant projects across the cluster's districts and state
+  const clusterDistricts = (cluster?.locations || []).map((l) => l.district.toLowerCase());
+  const evaluatedCollisions: EvaluatedCollision[] = projects
+    .filter((p) => {
+      const pDist = p.district.toLowerCase();
+      const pState = p.state.toLowerCase();
+      const pReg = p.region.toLowerCase();
 
-  // Determine collision status
-  let overlapLevel: 'NO OVERLAP' | 'PARTIAL OVERLAP' | 'HIGH OVERLAP' = 'NO OVERLAP';
-  let collisionNotes = 'No active schemes identified in this specific sector for the district.';
-  let collisionAction = 'Proceed with standalone capital budget requisition.';
+      const matchDistrict = clusterDistricts.some((d) => pDist.includes(d) || pReg.includes(d));
+      const matchState = pState === stateName.toLowerCase() || pReg.includes(stateName.toLowerCase());
+      const matchCategory = p.categories.some((cat) => cluster.categories.includes(cat));
 
-  if (existingProject) {
-    if (existingProject.coveragePercent >= 75) {
-      overlapLevel = 'HIGH OVERLAP';
-      collisionNotes = `High geographic and thematic overlap with Project #${existingProject.id} (${existingProject.name}).`;
-      collisionAction = 'Avoid independent tender. Coordinate inter-departmental integration.';
-    } else if (existingProject.categories.some((cat) => cluster.categories.includes(cat))) {
-      overlapLevel = 'PARTIAL OVERLAP';
-      collisionNotes = `Existing Project #${existingProject.id} (${existingProject.name}) operates in ${regionName} but covers trunk infrastructure, leaving local feeder habitations excluded.`;
-      collisionAction = 'Recommend scope expansion / contract variation order under existing mobilization rather than initiating a duplicate tender.';
-    } else {
-      overlapLevel = 'PARTIAL OVERLAP';
-      collisionNotes = `Adjacent project in ${regionName} by ${existingProject.department}. Opportunity for synchronized civil work.`;
-      collisionAction = 'Coordinate right-of-way and utility relocation joint approvals.';
-    }
-  }
+      return matchDistrict || (matchState && matchCategory);
+    })
+    .map((p) => {
+      const isSameDistrict = clusterDistricts.some((d) => p.district.toLowerCase().includes(d));
+      const hasCategoryMatch = p.categories.some((cat) => cluster.categories.includes(cat));
+
+      let overlapLevel: 'HIGH OVERLAP' | 'PARTIAL OVERLAP' | 'NO OVERLAP' = 'NO OVERLAP';
+      let overlapScore = 15;
+      let reason = `Scheme active in ${p.district} (${p.department}) with distinct operational scope.`;
+      let recommendedAction = 'No conflict. Independent capital requisition approved.';
+
+      if (isSameDistrict && hasCategoryMatch) {
+        if (p.coveragePercent >= 75) {
+          overlapLevel = 'HIGH OVERLAP';
+          overlapScore = 85;
+          reason = `High corridor and thematic overlap with Project #${p.id} (${p.name}). Both address ${p.categories.join(', ')}.`;
+          recommendedAction = 'Avoid independent duplicate tender. Mandate inter-departmental budget consolidation or scope variation.';
+        } else {
+          overlapLevel = 'PARTIAL OVERLAP';
+          overlapScore = 55;
+          reason = `Project #${p.id} (${p.name}) covers arterial network in ${p.district}, but leaves local feeder habitations and culverts unbudgeted.`;
+          recommendedAction = 'Execute contract scope expansion under existing mobilization rather than initiating a redundant tender.';
+        }
+      } else if (isSameDistrict && !hasCategoryMatch) {
+        overlapLevel = 'PARTIAL OVERLAP';
+        overlapScore = 40;
+        reason = `Adjacent civil works project in ${p.district} managed by ${p.department}.`;
+        recommendedAction = 'Coordinate right-of-way alignments and joint utility clearances to prevent street cuts after completion.';
+      } else if (!isSameDistrict && hasCategoryMatch) {
+        overlapLevel = 'PARTIAL OVERLAP';
+        overlapScore = 30;
+        reason = `Statewide program active in neighboring ${p.district} under ${p.department}.`;
+        recommendedAction = `Review district allocation formula to extend program benefits to ${districtName}.`;
+      }
+
+      return {
+        project: p,
+        overlapLevel,
+        overlapScore,
+        reason,
+        recommendedAction
+      };
+    });
+
+  // Calculate overall collision status across all evaluated projects
+  const hasHighOverlap = evaluatedCollisions.some((c) => c.overlapLevel === 'HIGH OVERLAP');
+  const hasPartialOverlap = evaluatedCollisions.some((c) => c.overlapLevel === 'PARTIAL OVERLAP');
+
+  const overallOverlapLevel: 'HIGH OVERLAP' | 'PARTIAL OVERLAP' | 'NO OVERLAP' = hasHighOverlap
+    ? 'HIGH OVERLAP'
+    : hasPartialOverlap
+    ? 'PARTIAL OVERLAP'
+    : 'NO OVERLAP';
+
+  const primaryCollision = evaluatedCollisions[0];
+  const collisionNotes = primaryCollision
+    ? `${evaluatedCollisions.length} relevant active scheme(s) evaluated in jurisdiction. ${primaryCollision.reason}`
+    : `No active government schemes identified in this sector for ${districtName}.`;
+  const collisionAction = primaryCollision
+    ? primaryCollision.recommendedAction
+    : 'Proceed with standalone capital budget requisition.';
 
   // Pre-compiled recommendation from repository or default
   const existingRec = recommendations.find((r) => r.needClusterId === cluster?.id);
@@ -73,39 +134,56 @@ export const ProjectCompilerView: React.FC<ProjectCompilerViewProps> = ({
   const handleCompile = () => {
     setIsCompiling(true);
     setTimeout(() => {
-      const rec: Recommendation = existingRec || {
-        id: `rec-gen-${Date.now().toString().slice(-4)}`,
-        title: `Comprehensive Infrastructure Intervention for ${cluster.title}`,
-        interventionType: 'Capital Expansion',
-        region: `${regionName}, Madhya Pradesh`,
-        district: regionName,
-        state: 'Madhya Pradesh',
-        estimatedCost: cluster.estimatedCost || 35.0,
-        affectedPopulation: cluster.affectedPopulation,
-        expectedGapReduction: Math.min(60, Math.round(cluster.infrastructureGapScore * 0.5)),
-        rationale: cluster.description,
-        evidence: {
-          signalsCount: cluster.signalCount,
-          infraGap: `Infrastructure gap score is ${cluster.infrastructureGapScore}/100`,
-          vulnerabilityHighlight: `High vulnerability score of ${cluster.vulnerabilityScore}/100`,
-          contributingDepartments: ['Road Transport & Highways', 'Rural Development'],
-          keySignalQuotes: ['Citizen signals indicate severe seasonal access disruptions.']
-        },
-        existingProjectOverlap: {
-          projectId: existingProject?.id,
-          projectName: existingProject?.name,
-          overlapLevel,
-          notes: collisionNotes,
-          recommendedAction: collisionAction
-        },
-        confidence: cluster.confidence || 0.92,
-        assumptions: [
-          'Pre-monsoon civil works execution schedule strictly adhered to',
-          'Inter-departmental coordination committee established for joint utility clearances'
-        ],
-        needClusterId: cluster.id,
-        createdAt: new Date().toISOString()
-      };
+      let rec: Recommendation;
+      if (existingRec) {
+        rec = {
+          ...existingRec,
+          region: existingRec.region || clusterRegion,
+          district: existingRec.district || districtName,
+          state: existingRec.state || stateName,
+          existingProjectOverlap: {
+            projectId: primaryCollision?.project.id || existingRec.existingProjectOverlap?.projectId,
+            projectName: primaryCollision?.project.name || existingRec.existingProjectOverlap?.projectName,
+            overlapLevel: overallOverlapLevel,
+            notes: collisionNotes,
+            recommendedAction: collisionAction
+          }
+        };
+      } else {
+        rec = {
+          id: `rec-gen-${Date.now().toString().slice(-4)}`,
+          title: `Comprehensive Infrastructure Intervention for ${cluster.title}`,
+          interventionType: 'Capital Expansion',
+          region: clusterRegion,
+          district: districtName,
+          state: stateName,
+          estimatedCost: cluster.estimatedCost || 35.0,
+          affectedPopulation: cluster.affectedPopulation,
+          expectedGapReduction: Math.min(60, Math.round(cluster.infrastructureGapScore * 0.5)),
+          rationale: cluster.description,
+          evidence: {
+            signalsCount: cluster.signalCount,
+            infraGap: `Infrastructure gap score is ${cluster.infrastructureGapScore}/100`,
+            vulnerabilityHighlight: `High vulnerability score of ${cluster.vulnerabilityScore}/100`,
+            contributingDepartments: cluster.categories.map((c) => `${c} Authority`),
+            keySignalQuotes: ['Citizen signals indicate severe access and service disruptions.']
+          },
+          existingProjectOverlap: {
+            projectId: primaryCollision?.project.id,
+            projectName: primaryCollision?.project.name,
+            overlapLevel: overallOverlapLevel,
+            notes: collisionNotes,
+            recommendedAction: collisionAction
+          },
+          confidence: cluster.confidence || 0.92,
+          assumptions: [
+            'Pre-monsoon civil works execution schedule strictly adhered to',
+            'Inter-departmental coordination committee established for joint utility clearances'
+          ],
+          needClusterId: cluster.id,
+          createdAt: new Date().toISOString()
+        };
+      }
       setCompiledRec(rec);
       setIsCompiling(false);
       setCurrentStep(4);
@@ -266,9 +344,9 @@ export const ProjectCompilerView: React.FC<ProjectCompilerViewProps> = ({
               {/* Collision Alert Banner */}
               <div
                 className={`p-4 rounded-xl border text-xs space-y-2 ${
-                  overlapLevel === 'PARTIAL OVERLAP'
+                  overallOverlapLevel === 'PARTIAL OVERLAP'
                     ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                    : overlapLevel === 'HIGH OVERLAP'
+                    : overallOverlapLevel === 'HIGH OVERLAP'
                     ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
                     : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
                 }`}
@@ -276,10 +354,10 @@ export const ProjectCompilerView: React.FC<ProjectCompilerViewProps> = ({
                 <div className="flex items-center justify-between font-bold text-sm">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4" />
-                    <span>Collision Status: {overlapLevel}</span>
+                    <span>Overall Collision Status: {overallOverlapLevel}</span>
                   </div>
                   <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-black/30">
-                    {existingProject?.department || 'Unassigned'}
+                    {evaluatedCollisions.length} Active Schemes Audited
                   </span>
                 </div>
 
@@ -287,10 +365,68 @@ export const ProjectCompilerView: React.FC<ProjectCompilerViewProps> = ({
 
                 <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 text-xs">
                   <span className="font-semibold text-white block mb-0.5">
-                    Collision Engine Recommendation:
+                    Collision Engine Consolidated Recommendation:
                   </span>
                   <p className="text-indigo-300 font-medium">{collisionAction}</p>
                 </div>
+              </div>
+
+              {/* All Evaluated Projects Breakdown */}
+              <div className="space-y-2.5">
+                <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block">
+                  Detailed Multi-Project Overlap Assessment ({evaluatedCollisions.length} Projects in Jurisdiction):
+                </span>
+
+                {evaluatedCollisions.length === 0 ? (
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-400">
+                    No conflicting or adjacent schemes identified in this district. High priority for new standalone allocation.
+                  </div>
+                ) : (
+                  evaluatedCollisions.map((item) => (
+                    <div
+                      key={item.project.id}
+                      className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-xs space-y-1.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-white">
+                          #{item.project.id}: {item.project.name}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            item.overlapLevel === 'HIGH OVERLAP'
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              : item.overlapLevel === 'PARTIAL OVERLAP'
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          }`}
+                        >
+                          {item.overlapLevel}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+                        <span>
+                          <strong>Department:</strong> {item.project.department}
+                        </span>
+                        <span>
+                          <strong>Location:</strong> {item.project.region}
+                        </span>
+                        <span>
+                          <strong>Budget:</strong> ₹{item.project.budget} Cr
+                        </span>
+                        <span>
+                          <strong>Coverage:</strong> {item.project.coveragePercent}%
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{item.reason}</p>
+
+                      <div className="text-[11px] text-indigo-300 font-medium bg-slate-900/80 p-2 rounded border border-slate-800">
+                        ↳ Coordinated Action: {item.recommendedAction}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -363,6 +499,31 @@ export const ProjectCompilerView: React.FC<ProjectCompilerViewProps> = ({
                 <p className="text-slate-300 leading-relaxed">
                   {compiledRec?.rationale || existingRec?.rationale}
                 </p>
+              </div>
+
+              {/* Multi-Project Collision Audit Summary */}
+              <div
+                className={`p-3.5 rounded-lg border text-xs space-y-1.5 ${
+                  overallOverlapLevel === 'HIGH OVERLAP'
+                    ? 'bg-rose-950/40 border-rose-800/80 text-rose-200'
+                    : overallOverlapLevel === 'PARTIAL OVERLAP'
+                    ? 'bg-amber-950/40 border-amber-800/80 text-amber-200'
+                    : 'bg-emerald-950/40 border-emerald-800/80 text-emerald-200'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-1 font-semibold text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>Multi-Project Collision Audit: {overallOverlapLevel} ({evaluatedCollisions.length} Schemes Evaluated)</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-black/40 uppercase">
+                    {primaryCollision ? `#${primaryCollision.project.id}` : 'Standalone Priority'}
+                  </span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">{collisionNotes}</p>
+                <div className="text-indigo-300 text-[11px] font-medium pt-0.5">
+                  ↳ Coordinated Directive: {collisionAction}
+                </div>
               </div>
 
               {/* Assumptions */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GitMerge,
   Sparkles,
@@ -22,11 +22,17 @@ export const ConvergenceView: React.FC<ConvergenceViewProps> = ({
   convergenceGroups,
   onSelectCluster
 }) => {
-  const [selectedGroup, setSelectedGroup] = useState<NeedConvergenceGroup>(
+  const [selectedGroup, setSelectedGroup] = useState<NeedConvergenceGroup | null>(
     convergenceGroups[0] || null
   );
   const [generatingForId, setGeneratingForId] = useState<string | null>(null);
   const [generatedOpportunity, setGeneratedOpportunity] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!selectedGroup && convergenceGroups.length > 0) {
+      setSelectedGroup(convergenceGroups[0]);
+    }
+  }, [convergenceGroups, selectedGroup]);
 
   const handleGenerateOpportunity = async (group: NeedConvergenceGroup) => {
     setGeneratingForId(group.id);
@@ -99,7 +105,7 @@ export const ConvergenceView: React.FC<ConvergenceViewProps> = ({
                   {selectedGroup.rootCause}
                 </h3>
                 <span className="text-xs text-slate-400 mt-1 block">
-                  Region: {selectedGroup.region} · Impacting ~{selectedGroup.affectedPopulation.toLocaleString()} citizens
+                  Region: {selectedGroup.region} · Impacting ~{(selectedGroup.affectedPopulation || 0).toLocaleString()} citizens
                 </span>
               </div>
 
