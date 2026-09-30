@@ -1,0 +1,6 @@
+{
+  "name": "CivicTwin AI",
+  "description": "An AI-powered Digital Public Good that transforms multilingual citizen signals into gap-aware, evidence-backed and budget-aware infrastructure decisions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
