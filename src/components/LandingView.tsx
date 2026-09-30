@@ -29,7 +29,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
     <div className="min-h-full bg-slate-950 text-slate-100 overflow-y-auto pb-16">
       {/* Top Banner / Track Notice */}
       <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 border-b border-indigo-900/40 py-2 px-4 text-center">
-        <p className="text-xs text-indigo-300 font-medium flex items-center justify-center gap-2">
+        <p className="text-xs text-indigo-300 font-medium flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
           <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
           <span>Track 1 — AI for Digital Public Infrastructure & Governance</span>
           <span>·</span>

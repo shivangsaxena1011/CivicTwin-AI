@@ -127,7 +127,7 @@ export const DemoScenarioModal: React.FC<DemoScenarioModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="pt-4 mt-5 border-t border-slate-800 flex justify-between items-center text-xs">
+        <div className="pt-4 mt-5 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
           <span className="text-[11px] text-slate-500 italic">
             * Clearly marked as an AI-generated illustrative recommendation.
           </span>

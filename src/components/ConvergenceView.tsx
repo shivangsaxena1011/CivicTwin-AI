@@ -70,12 +70,12 @@ export const ConvergenceView: React.FC<ConvergenceViewProps> = ({
             </h2>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1">
             {convergenceGroups.map((g) => (
               <button
                 key={g.id}
                 onClick={() => setSelectedGroup(g)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
                   selectedGroup?.id === g.id
                     ? 'bg-indigo-600 text-white'
                     : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'

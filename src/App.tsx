@@ -17,6 +17,17 @@ import { BricsModal } from './components/BricsModal.js';
 import { DemoScenarioModal } from './components/DemoScenarioModal.js';
 import { JudgeDemoTour } from './components/JudgeDemoTour.js';
 import { QAReportModal } from './components/QAReportModal.js';
+import {
+  LayoutDashboard,
+  MessageSquareText,
+  EyeOff,
+  Cpu,
+  Menu,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  X
+} from 'lucide-react';
 
 import {
   CitizenSignal,
@@ -30,6 +41,12 @@ import {
   SilentGapItem
 } from './types.js';
 
+interface ToastItem {
+  id: string;
+  message: string;
+  type: 'success' | 'info' | 'warning';
+}
+
 export default function App() {
   const [currentView, setCurrentView] = useState<NavView>('landing');
   const [activeCountry, setActiveCountry] = useState<string>('India');
@@ -42,6 +59,22 @@ export default function App() {
   const [isJudgeDemoOpen, setIsJudgeDemoOpen] = useState<boolean>(false);
   const [judgeDemoStep, setJudgeDemoStep] = useState<number>(1);
   const [isQAReportOpen, setIsQAReportOpen] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
+  // In-app non-blocking toasts (replaces window.alert for iframe compatibility)
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'warning' = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Cross-view selection state
   const [selectedClusterId, setSelectedClusterId] = useState<string>('clus-conn-01');
@@ -106,6 +139,7 @@ export default function App() {
 
   const handleIngestSignal = (newSignal: CitizenSignal) => {
     setSignals((prev) => [newSignal, ...prev]);
+    showToast(`Signal ingested: "${newSignal.subCategory}" (${newSignal.language})`, 'success');
   };
 
   const handleSaveCandidate = async (newRec: Recommendation) => {
@@ -119,11 +153,11 @@ export default function App() {
       const saved = data.recommendation || newRec;
       setRecommendations((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)]);
       setSelectedRecId(saved.id);
-      alert(`Candidate proposal "${saved.title}" successfully persisted in state registry!`);
+      showToast(`Candidate proposal "${saved.title}" saved to registry!`, 'success');
     } catch (err) {
       console.error(err);
       setRecommendations((prev) => [newRec, ...prev]);
-      alert(`Saved proposal locally: "${newRec.title}"`);
+      showToast(`Saved proposal locally: "${newRec.title}"`, 'info');
     }
   };
 
@@ -131,6 +165,7 @@ export default function App() {
     try {
       await fetch('/api/demo/reset');
       await loadData();
+      showToast('CivicTwin AI data reset to default baseline state.', 'info');
     } catch (e) {
       console.error(e);
     }
@@ -172,6 +207,7 @@ export default function App() {
         onOpenShowcase={() => setIsShowcaseOpen(true)}
         onOpenJudgeDemo={handleStartJudgeDemo}
         onOpenQAReport={() => setIsQAReportOpen(true)}
+        onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         onRefreshData={loadData}
         activeCountry={activeCountry}
         setActiveCountry={setActiveCountry}
@@ -188,7 +224,7 @@ export default function App() {
         />
       ) : (
         <div className="flex-1 flex overflow-hidden">
-          {/* Left Sidebar */}
+          {/* Left Sidebar (Desktop + Mobile Drawer) */}
           <Sidebar
             currentView={currentView}
             setCurrentView={setCurrentView}
@@ -197,6 +233,12 @@ export default function App() {
             onOpenJudgeDemo={handleStartJudgeDemo}
             onOpenQAReport={() => setIsQAReportOpen(true)}
             silentGapsCount={silentGaps.length}
+            isOpenMobile={isMobileMenuOpen}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
+            activeCountry={activeCountry}
+            setActiveCountry={setActiveCountry}
+            currentLanguage={currentLanguage}
+            setCurrentLanguage={setCurrentLanguage}
           />
 
           {/* Active View Container */}
@@ -220,6 +262,7 @@ export default function App() {
                 signals={signals}
                 onIngestSignal={handleIngestSignal}
                 onSelectCluster={handleSelectCluster}
+                showToast={showToast}
               />
             )}
 
@@ -286,8 +329,105 @@ export default function App() {
               />
             )}
           </main>
+
+          {/* Mobile Bottom Navigation Bar (< lg) */}
+          <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md px-1 py-1.5 flex items-center justify-around text-[10px] shadow-2xl safe-area-bottom">
+            <button
+              onClick={() => setCurrentView('command-center')}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition min-w-[56px] ${
+                currentView === 'command-center'
+                  ? 'text-indigo-400 font-bold bg-indigo-500/10'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <LayoutDashboard className="h-4 w-4 mb-0.5" />
+              <span>Command</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentView('signals')}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition min-w-[56px] ${
+                currentView === 'signals'
+                  ? 'text-indigo-400 font-bold bg-indigo-500/10'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <MessageSquareText className="h-4 w-4 mb-0.5" />
+              <span>Signals</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentView('silent-gaps')}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition relative min-w-[56px] ${
+                currentView === 'silent-gaps'
+                  ? 'text-amber-400 font-bold bg-amber-500/10'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <EyeOff className="h-4 w-4 mb-0.5" />
+              <span>Silent Gaps</span>
+              {silentGaps.length > 0 && (
+                <span className="absolute top-0.5 right-2 h-2 w-2 rounded-full bg-amber-500" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setCurrentView('compiler')}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition min-w-[56px] ${
+                currentView === 'compiler'
+                  ? 'text-indigo-400 font-bold bg-indigo-500/10'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Cpu className="h-4 w-4 mb-0.5" />
+              <span>Compiler</span>
+            </button>
+
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="flex flex-col items-center justify-center py-1 px-2.5 rounded-lg text-slate-400 hover:text-white min-w-[56px]"
+              aria-label="Open full menu"
+            >
+              <Menu className="h-4 w-4 mb-0.5" />
+              <span>More</span>
+            </button>
+          </nav>
         </div>
       )}
+
+      {/* Floating In-App Toast Notifications (No window.alert in iframe) */}
+      <div className="fixed top-16 right-3 sm:right-6 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-2 sm:px-0">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`pointer-events-auto p-3 rounded-xl shadow-xl border flex items-center justify-between gap-3 text-xs backdrop-blur-md transition-all ${
+              toast.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
+                : toast.type === 'warning'
+                ? 'bg-amber-950/90 border-amber-500/50 text-amber-200'
+                : 'bg-indigo-950/90 border-indigo-500/50 text-indigo-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {toast.type === 'success' ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              ) : toast.type === 'warning' ? (
+                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              ) : (
+                <Info className="h-4 w-4 text-indigo-400 shrink-0" />
+              )}
+              <span>{toast.message}</span>
+            </div>
+            <button
+              onClick={() => removeToast(toast.id)}
+              className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white shrink-0"
+              aria-label="Dismiss toast"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
 
       {/* Guided Judge Demo Tour Panel */}
       <JudgeDemoTour

@@ -100,7 +100,7 @@ export const BudgetSimulatorView: React.FC<BudgetSimulatorViewProps> = ({
       <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Quick Presets */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400">Budget Presets:</span>
             {presets.map((amt) => (
               <button
@@ -121,7 +121,7 @@ export const BudgetSimulatorView: React.FC<BudgetSimulatorViewProps> = ({
           </div>
 
           {/* Filters: Region & Sector */}
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs w-full sm:w-auto">
             <select
               value={selectedRegion}
               onChange={(e) => setSelectedRegion(e.target.value)}

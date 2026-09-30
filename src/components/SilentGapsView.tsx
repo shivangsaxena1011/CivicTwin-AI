@@ -77,7 +77,7 @@ export const SilentGapsView: React.FC<SilentGapsViewProps> = ({
 
       {/* Table Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-slate-400 font-medium mr-1">Severity:</span>
           {['All', 'Critical Silent Gap', 'High Silent Gap', 'Moderate Silent Gap'].map((lvl) => (
             <button
@@ -92,7 +92,7 @@ export const SilentGapsView: React.FC<SilentGapsViewProps> = ({
           ))}
         </div>
 
-        <div className="relative min-w-[200px]">
+        <div className="relative min-w-[200px] flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500" />
           <input
             type="text"
@@ -104,8 +104,76 @@ export const SilentGapsView: React.FC<SilentGapsViewProps> = ({
         </div>
       </div>
 
-      {/* Silent Gaps Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-md">
+      {/* Mobile Card View (< md) */}
+      <div className="md:hidden space-y-3">
+        {filtered.map((item) => (
+          <div
+            key={item.id}
+            onClick={() => setSelectedGap(item)}
+            className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 transition cursor-pointer space-y-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block">{item.category}</span>
+                <h3 className="text-sm font-bold text-white">{item.region}</h3>
+                <span className="text-[10px] text-slate-400">Pop: {item.affectedPopulation.toLocaleString()}</span>
+              </div>
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold border shrink-0 ${
+                  item.level === 'Critical Silent Gap'
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    : item.level === 'High Silent Gap'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+                }`}
+              >
+                {item.level}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center text-xs bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80">
+              <div>
+                <span className="text-[10px] text-slate-400 block">Citizen Voice</span>
+                <span className="font-bold text-amber-400">{item.citizenSignalsCount}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Infra Deficit</span>
+                <span className="font-bold text-rose-400">-{item.infrastructureGap}%</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Digital Voice</span>
+                <span className={`font-bold ${item.digitalParticipationIndex < 25 ? 'text-rose-400' : 'text-amber-400'}`}>
+                  {item.digitalParticipationIndex}/100
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedGap(item);
+                }}
+                className="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium text-center transition"
+              >
+                Why Flagged?
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenCompilerForRegion(item.region);
+                }}
+                className="flex-1 py-1.5 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium text-center transition"
+              >
+                Compile Intervention →
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Silent Gaps Table (>= md) */}
+      <div className="hidden md:block bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-md">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider font-semibold">

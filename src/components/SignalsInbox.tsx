@@ -23,12 +23,14 @@ interface SignalsInboxProps {
   signals: CitizenSignal[];
   onIngestSignal: (newSignal: CitizenSignal) => void;
   onSelectCluster: (clusterId: string) => void;
+  showToast?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
 export const SignalsInbox: React.FC<SignalsInboxProps> = ({
   signals,
   onIngestSignal,
-  onSelectCluster
+  onSelectCluster,
+  showToast
 }) => {
   const [selectedSignal, setSelectedSignal] = useState<CitizenSignal | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'voice' | 'text' | 'messaging'>('all');
@@ -94,7 +96,10 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert('Voice recording is not supported in this browser environment. Using demo text processing.');
+        if (showToast) {
+          showToast('Voice recording unavailable in iframe. Using demo text processing.', 'warning');
+        }
+        setInputText('School bus cannot reach our village because rain water flooded the unpaved road and broken culvert.');
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -122,7 +127,9 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
       console.warn('Microphone permission denied or unavailable:', err);
       // Graceful fallback per instructions
       setInputText('School bus cannot reach our village because rain water flooded the unpaved road and broken culvert.');
-      alert('Voice processing unavailable in this browser preview — demo text processing enabled.');
+      if (showToast) {
+        showToast('Voice processing simulated with demo civic voice record.', 'info');
+      }
     }
   };
 
@@ -225,10 +232,10 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
       {/* Source Tabs & Search */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
         {/* Source Segmented Control */}
-        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs overflow-x-auto max-w-full">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-3 py-1 rounded text-xs font-medium transition ${
+            className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition ${
               activeTab === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -236,7 +243,7 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('messaging')}
-            className={`px-3 py-1 rounded text-xs font-medium transition ${
+            className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition ${
               activeTab === 'messaging' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -244,7 +251,7 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('voice')}
-            className={`px-3 py-1 rounded text-xs font-medium transition ${
+            className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition ${
               activeTab === 'voice' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -252,7 +259,7 @@ export const SignalsInbox: React.FC<SignalsInboxProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('text')}
-            className={`px-3 py-1 rounded text-xs font-medium transition ${
+            className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition ${
               activeTab === 'text' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >

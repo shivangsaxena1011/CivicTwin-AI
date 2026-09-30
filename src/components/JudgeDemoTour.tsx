@@ -192,8 +192,8 @@ export const JudgeDemoTour: React.FC<JudgeDemoTourProps> = ({
   };
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-4">
-      <div className="bg-slate-900/95 border-2 border-indigo-500 rounded-2xl p-5 shadow-2xl backdrop-blur-md text-white">
+    <div className="fixed bottom-16 sm:bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-2 sm:px-4 pointer-events-none">
+      <div className="bg-slate-900/95 border-2 border-indigo-500 rounded-2xl p-4 sm:p-5 shadow-2xl backdrop-blur-md text-white max-h-[80vh] overflow-y-auto pointer-events-auto">
         {/* Top Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
           <div className="flex items-center gap-2.5">

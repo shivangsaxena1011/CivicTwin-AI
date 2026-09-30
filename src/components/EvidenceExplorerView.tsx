@@ -70,7 +70,7 @@ export const EvidenceExplorerView: React.FC<EvidenceExplorerViewProps> = ({
         <select
           value={activeRec?.id}
           onChange={(e) => setActiveRecId(e.target.value)}
-          className="flex-1 max-w-xl bg-slate-950 border border-slate-800 text-slate-200 rounded-lg p-2 focus:outline-none focus:border-indigo-500"
+          className="flex-1 w-full sm:w-auto max-w-xl bg-slate-950 border border-slate-800 text-slate-200 rounded-lg p-2 focus:outline-none focus:border-indigo-500 text-xs"
         >
           {recommendations.map((r) => (
             <option key={r.id} value={r.id}>

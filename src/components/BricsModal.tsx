@@ -221,7 +221,7 @@ export const BricsModal: React.FC<BricsModalProps> = ({
             <h3 className="text-xs font-semibold text-white uppercase tracking-wider mb-2">
               BRICS Common Civic Taxonomy Mapping (9 Core Domains)
             </h3>
-            <div className="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden text-xs">
+            <div className="bg-slate-950 border border-slate-800 rounded-lg overflow-x-auto text-xs">
               <table className="w-full text-left text-slate-300">
                 <thead className="bg-slate-900 text-slate-400 text-[10px] uppercase">
                   <tr>
